@@ -204,7 +204,9 @@ bool CodeRange::InitReservation(v8::PageAllocator* page_allocator,
     params.requested_start_hint = the_hint;
     if (!VirtualMemoryCage::InitReservation(params)) {
       params.requested_start_hint = kNullAddress;
-      if (!VirtualMemoryCage::InitReservation(params)) return false;
+      if (!VirtualMemoryCage::InitReservation(params)) {
+        return false;
+      }
     }
     TRACE("=== Fallback attempt, hint=%p: [%p, %p)\n",
           reinterpret_cast<void*>(params.requested_start_hint),

@@ -943,6 +943,7 @@ external_v8_defines = [
   "V8_TARGET_OS_IOS",
   "V8_TARGET_OS_LINUX",
   "V8_TARGET_OS_MACOS",
+  "V8_TARGET_OS_OHOS",
   "V8_TARGET_OS_WIN",
   "V8_TARGET_OS_CHROMEOS",
 ]
@@ -1018,6 +1019,9 @@ if (target_os == "android") {
 } else if (target_os == "mac") {
   enabled_external_v8_defines += [ "V8_HAVE_TARGET_OS" ]
   enabled_external_v8_defines += [ "V8_TARGET_OS_MACOS" ]
+} else if (target_os == "ohos") {
+  enabled_external_v8_defines += [ "V8_HAVE_TARGET_OS" ]
+  enabled_external_v8_defines += [ "V8_TARGET_OS_OHOS" ]
 } else if (target_os == "win") {
   enabled_external_v8_defines += [ "V8_HAVE_TARGET_OS" ]
   enabled_external_v8_defines += [ "V8_TARGET_OS_WIN" ]
@@ -6057,7 +6061,7 @@ v8_source_set("v8_base_without_compiler") {
     if (v8_enable_webassembly) {
       # iOS Xcode simulator builds run on an x64 target. iOS and macOS are both
       # based on Darwin and thus POSIX-compliant to a similar degree.
-      if (is_linux || is_chromeos || is_mac || is_ios ||
+      if (is_linux || is_chromeos || is_mac || is_ios || is_ohos ||
           target_os == "freebsd") {
         sources += [
           "src/trap-handler/handler-inside-posix.cc",
@@ -6108,7 +6112,7 @@ v8_source_set("v8_base_without_compiler") {
     ]
     if (v8_enable_webassembly) {
       # Trap handling is enabled on arm64 and x64, on Linux, Mac and Windows.
-      if ((current_cpu == "arm64" && (is_linux || is_chromeos || is_apple)) ||
+      if ((current_cpu == "arm64" && (is_linux || is_chromeos || is_apple || is_ohos)) ||
           (current_cpu == "x64" && (is_linux || is_chromeos || is_mac))) {
         sources += [
           "src/trap-handler/handler-inside-posix.cc",
@@ -6683,7 +6687,7 @@ v8_component("v8_libbase") {
     }
   }
 
-  if (is_linux || is_chromeos) {
+  if (is_linux || is_chromeos || is_ohos) {
     sources += [
       "src/base/debug/stack_trace_posix.cc",
       "src/base/platform/platform-linux.cc",
@@ -7806,6 +7810,8 @@ v8_executable("d8") {
   if (current_os == "zos" && is_component_build) {
     deps += [ ":zoslib" ]
   }
+
+  libs = [ "hilog_ndk.z" ]
 }
 
 v8_executable("v8_hello_world") {

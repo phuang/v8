@@ -963,7 +963,6 @@ StackFrame::Type StackFrameIterator::ComputeStackFrameType(
 #endif
 
   const Address pc = StackFrame::ReadPC(state->pc_address);
-
 #if V8_ENABLE_WEBASSEMBLY
   // If the {pc} does not point into WebAssembly code we can rely on the
   // returned {wasm_code} to be null and fall back to {GetContainingCode}.

@@ -43,6 +43,8 @@ v8_executable("cctest") {
   if (current_os == "aix") {
     ldflags = [ "-Wl,-bbigtoc" ]
   }
+
+  libs = [ "hilog_ndk.z" ]
 }
 
 v8_header_set("cctest_headers") {
