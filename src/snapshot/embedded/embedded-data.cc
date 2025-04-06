@@ -75,7 +75,9 @@ bool OffHeapInstructionStream::TryGetAddressForHashing(
 Builtin OffHeapInstructionStream::TryLookupCode(Isolate* isolate,
                                                 Address address) {
   // Mksnapshot calls this while the embedded blob is not available yet.
-  if (isolate->embedded_blob_code() == nullptr) return Builtin::kNoBuiltinId;
+  if (isolate->embedded_blob_code() == nullptr) {
+    return Builtin::kNoBuiltinId;
+  }
   DCHECK_NOT_NULL(Isolate::CurrentEmbeddedBlobCode());
 
   Builtin builtin = EmbeddedData::FromBlob(isolate).TryLookupCode(address);

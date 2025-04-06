@@ -6622,6 +6622,21 @@ bool v8::V8::Initialize(const int build_config) {
         kV8TargetOsIsAndroid ? "Android" : "not Android");
   }
 
+  const bool kEmbedderTargetOsIsOHOS =
+      (build_config & kTargetOsIsOHOS) != 0;
+#ifdef V8_TARGET_OS_OHOS
+  const bool kV8TargetOsIsOHOS = true;
+#else
+  const bool kV8TargetOsIsOHOS = false;
+#endif
+  if (kEmbedderTargetOsIsOHOS != kV8TargetOsIsOHOS) {
+    FATAL(
+        "Embedder-vs-V8 build configuration mismatch. On embedder side "
+        "target OS is %s while on V8 side it's %s.",
+        kEmbedderTargetOsIsOHOS ? "OHOS" : "not OHOS",
+        kV8TargetOsIsOHOS ? "OHOS" : "not OHOS");
+  }
+
   const bool kEmbedderEnableChecks = (build_config & kEnableChecks) != 0;
 #ifdef V8_ENABLE_CHECKS
   const bool kV8EnableChecks = true;

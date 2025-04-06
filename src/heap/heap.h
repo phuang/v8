@@ -291,7 +291,7 @@ class Heap final {
   };
   using Reservation = std::vector<Chunk>;
 
-#if V8_OS_ANDROID
+#if V8_OS_ANDROID || V8_OS_OHOS
   // Don't apply pointer multiplier on Android since it has no swap space and
   // should instead adapt it's heap size based on available physical memory.
   static const int kPointerMultiplier = 1;

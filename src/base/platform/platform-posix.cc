@@ -33,6 +33,12 @@
 #include <android/log.h>
 #endif
 
+#if defined(__OHOS__)
+#define LOG_DOMAIN 0x3311
+#define LOG_TAG "chromium"
+#include <hilog/log.h>
+#endif
+
 #include <cmath>
 #include <cstdlib>
 #include <optional>
@@ -155,8 +161,20 @@ int GetFlagsForMemoryPermission(OS::MemoryPermission access,
   if (access == OS::MemoryPermission::kNoAccessWillJitLater ||
       access == OS::MemoryPermission::kReadWriteExecute) {
     flags |= MAP_JIT;
+
   }
 #endif  // V8_OS_DARWIN
+#if defined(__OHOS__)
+  // MAP_JIT is required to obtain writable and executable pages when the
+  // hardened runtime/memory protection is enabled, which is optional (via code
+  // signing) on Intel-based Macs but mandatory on Apple silicon ones. See also
+  // https://developer.apple.com/documentation/apple-silicon/porting-just-in-time-compilers-to-apple-silicon.
+  if (access == OS::MemoryPermission::kNoAccessWillJitLater ||
+      access == OS::MemoryPermission::kReadWriteExecute) {
+    flags |= 0x1000;
+  }
+#endif  // V8_OS_DARWIN
+
   return flags;
 }
 
@@ -164,8 +182,11 @@ void* Allocate(void* hint, size_t size, OS::MemoryPermission access,
                PageType page_type) {
   int prot = GetProtectionFromMemoryPermission(access);
   int flags = GetFlagsForMemoryPermission(access, page_type);
+  // prot &= ~PROT_EXEC;
   void* result = mmap(hint, size, prot, flags, kMmapFd, kMmapFdOffset);
-  if (result == MAP_FAILED) return nullptr;
+  if (result == MAP_FAILED) {
+    return nullptr;
+  }
 
 #if V8_OS_LINUX && V8_ENABLE_PRIVATE_MAPPING_FORK_OPTIMIZATION
   // This is advisory, so we ignore errors.
@@ -344,7 +365,8 @@ void* OS::GetRandomMmapAddr() {
   // fulfilling our placement request.
   raw_addr &= uint64_t{0x3FFFFFFFF000};
 #elif V8_TARGET_ARCH_ARM64
-#if defined(V8_TARGET_OS_LINUX) || defined(V8_TARGET_OS_ANDROID)
+#if defined(V8_TARGET_OS_LINUX) || defined(V8_TARGET_OS_ANDROID) || \
+    defined(V8_TARGET_OS_OHOS)
   // On Linux, the default virtual address space is limited to 39 bits when
   // using 4KB pages, see arch/arm64/Kconfig. We truncate to 38 bits.
   raw_addr &= uint64_t{0x3FFFFFF000};
@@ -427,7 +449,9 @@ void* OS::Allocate(void* hint, size_t size, size_t alignment,
   size_t request_size = size + (alignment - page_size);
   request_size = RoundUp(request_size, OS::AllocatePageSize());
   void* result = base::Allocate(hint, request_size, access, PageType::kPrivate);
-  if (result == nullptr) return nullptr;
+  if (result == nullptr) {
+    return nullptr;
+  }
 
   // Unmap memory allocated before the aligned base address.
   uint8_t* base = static_cast<uint8_t*>(result);
@@ -471,9 +495,12 @@ void* OS::AllocateShared(void* hint, size_t size, MemoryPermission access,
                          PlatformSharedMemoryHandle handle, uint64_t offset) {
   DCHECK_EQ(0, size % AllocatePageSize());
   int prot = GetProtectionFromMemoryPermission(access);
+  // prot &= ~PROT_EXEC;
   int fd = FileDescriptorFromSharedMemoryHandle(handle);
   void* result = mmap(hint, size, prot, MAP_SHARED, fd, offset);
-  if (result == MAP_FAILED) return nullptr;
+  if (result == MAP_FAILED) {
+    return nullptr;
+  }
   return result;
 }
 #endif  // !defined(V8_OS_DARWIN)
@@ -503,7 +530,10 @@ bool OS::SetPermissions(void* address, size_t size, MemoryPermission access) {
   // Any failure that's not OOM likely indicates a bug in the caller (e.g.
   // using an invalid mapping) so attempt to catch that here to facilitate
   // debugging of these failures.
-  if (ret != 0) CHECK_EQ(ENOMEM, errno);
+  if (ret != 0) {
+    CHECK_EQ(ENOMEM, errno);
+    abort();
+  }
 
   // MacOS 11.2 on Apple Silicon refuses to switch permissions from
   // rwx to none. Just use madvise instead.
@@ -710,15 +740,11 @@ bool OS::HasLazyCommits() {
 #endif  // !V8_OS_ZOS
 #endif  // !V8_OS_CYGWIN && !V8_OS_FUCHSIA
 
-const char* OS::GetGCFakeMMapFile() {
-  return g_gc_fake_mmap;
-}
-
+const char* OS::GetGCFakeMMapFile() { return g_gc_fake_mmap; }
 
 void OS::Sleep(TimeDelta interval) {
   usleep(static_cast<useconds_t>(interval.InMicroseconds()));
 }
-
 
 void OS::Abort() {
   switch (g_abort_mode) {
@@ -734,7 +760,6 @@ void OS::Abort() {
   // Redirect to std abort to signal abnormal program termination.
   abort();
 }
-
 
 void OS::DebugBreak() {
 #if V8_HOST_ARCH_ARM
@@ -781,7 +806,6 @@ class PosixMemoryMappedFile final : public OS::MemoryMappedFile {
   void* const memory_;
   size_t const size_;
 };
-
 
 // static
 OS::MemoryMappedFile* OS::MemoryMappedFile::open(const char* name,
@@ -832,17 +856,13 @@ OS::MemoryMappedFile* OS::MemoryMappedFile::create(const char* name,
   return nullptr;
 }
 
-
 PosixMemoryMappedFile::~PosixMemoryMappedFile() {
   if (memory_) OS::Free(memory_, RoundUp(size_, OS::AllocatePageSize()));
   fclose(file_);
 }
 #endif  // !V8_OS_ZOS
 
-int OS::GetCurrentProcessId() {
-  return static_cast<int>(getpid());
-}
-
+int OS::GetCurrentProcessId() { return static_cast<int>(getpid()); }
 
 int OS::GetCurrentThreadId() {
 #if V8_OS_DARWIN || (V8_OS_ANDROID && defined(__APPLE__))
@@ -909,24 +929,18 @@ int OS::GetPeakMemoryUsageKb() {
 #endif  // defined(V8_OS_FUCHSIA)
 }
 
-double OS::TimeCurrentMillis() {
-  return Time::Now().ToJsTime();
-}
+double OS::TimeCurrentMillis() { return Time::Now().ToJsTime(); }
 
 double PosixTimezoneCache::DaylightSavingsOffset(double time) {
   if (std::isnan(time)) return std::numeric_limits<double>::quiet_NaN();
-  time_t tv = static_cast<time_t>(std::floor(time/msPerSecond));
+  time_t tv = static_cast<time_t>(std::floor(time / msPerSecond));
   struct tm tm;
   struct tm* t = localtime_r(&tv, &tm);
   if (nullptr == t) return std::numeric_limits<double>::quiet_NaN();
   return t->tm_isdst > 0 ? 3600 * msPerSecond : 0;
 }
 
-
-int OS::GetLastError() {
-  return errno;
-}
-
+int OS::GetLastError() { return errno; }
 
 // ----------------------------------------------------------------------------
 // POSIX stdio support.
@@ -946,10 +960,7 @@ FILE* OS::FOpen(const char* path, const char* mode) {
   return nullptr;
 }
 
-
-bool OS::Remove(const char* path) {
-  return (remove(path) == 0);
-}
+bool OS::Remove(const char* path) { return (remove(path) == 0); }
 
 char OS::DirectorySeparator() { return '/'; }
 
@@ -957,10 +968,7 @@ bool OS::isDirectorySeparator(const char ch) {
   return ch == DirectorySeparator();
 }
 
-
-FILE* OS::OpenTemporaryFile() {
-  return tmpfile();
-}
+FILE* OS::OpenTemporaryFile() { return tmpfile(); }
 
 const char* const OS::LogFileOpenMode = "w+";
 
@@ -971,15 +979,18 @@ void OS::Print(const char* format, ...) {
   va_end(args);
 }
 
-
 void OS::VPrint(const char* format, va_list args) {
 #if defined(ANDROID) && !defined(V8_ANDROID_LOG_STDOUT)
   __android_log_vprint(ANDROID_LOG_INFO, LOG_TAG, format, args);
+#endif
+#if defined(__OHOS__)
+  char buf[2048];
+  VSNPrintF(buf, sizeof(buf), format, args);
+  OH_LOG_ERROR(LOG_APP, "%{public}s", buf);
 #else
   vprintf(format, args);
 #endif
 }
-
 
 void OS::FPrint(FILE* out, const char* format, ...) {
   va_list args;
@@ -988,7 +999,6 @@ void OS::FPrint(FILE* out, const char* format, ...) {
   va_end(args);
 }
 
-
 void OS::VFPrint(FILE* out, const char* format, va_list args) {
 #if defined(ANDROID) && !defined(V8_ANDROID_LOG_STDOUT)
   if (out == stdout) {
@@ -996,9 +1006,14 @@ void OS::VFPrint(FILE* out, const char* format, va_list args) {
     return;
   }
 #endif
+#if defined(__OHOS__)
+  char buf[2048];
+  VSNPrintF(buf, sizeof(buf), format, args);
+  OH_LOG_ERROR(LOG_APP, "%{public}s", buf);
+#else
   vfprintf(out, format, args);
+#endif
 }
-
 
 void OS::PrintError(const char* format, ...) {
   va_list args;
@@ -1008,15 +1023,17 @@ void OS::PrintError(const char* format, ...) {
   fflush(stderr);
 }
 
-
 void OS::VPrintError(const char* format, va_list args) {
 #if defined(ANDROID) && !defined(V8_ANDROID_LOG_STDOUT)
   __android_log_vprint(ANDROID_LOG_ERROR, LOG_TAG, format, args);
+#elif defined(__OHOS__)
+  char buf[2048];
+  VSNPrintF(buf, sizeof(buf), format, args);
+  OH_LOG_ERROR(LOG_APP, "%{public}s", buf);
 #else
   vfprintf(stderr, format, args);
 #endif
 }
-
 
 int OS::SNPrintF(char* str, int length, const char* format, ...) {
   va_list args;
@@ -1026,22 +1043,16 @@ int OS::SNPrintF(char* str, int length, const char* format, ...) {
   return result;
 }
 
-
-int OS::VSNPrintF(char* str,
-                  int length,
-                  const char* format,
-                  va_list args) {
+int OS::VSNPrintF(char* str, int length, const char* format, va_list args) {
   int n = vsnprintf(str, length, format, args);
   if (n < 0 || n >= length) {
     // If the length is zero, the assignment fails.
-    if (length > 0)
-      str[length - 1] = '\0';
+    if (length > 0) str[length - 1] = '\0';
     return -1;
   } else {
     return n;
   }
 }
-
 
 // ----------------------------------------------------------------------------
 // POSIX string support.
@@ -1161,10 +1172,7 @@ Thread::Thread(const Options& options)
   set_name(options.name());
 }
 
-Thread::~Thread() {
-  delete data_;
-}
-
+Thread::~Thread() { delete data_; }
 
 static void SetThreadName(const char* name) {
 #if V8_OS_DRAGONFLYBSD || V8_OS_FREEBSD || V8_OS_OPENBSD
@@ -1177,7 +1185,7 @@ static void SetThreadName(const char* name) {
   // for it at runtime.
   int (*dynamic_pthread_setname_np)(const char*);
   *reinterpret_cast<void**>(&dynamic_pthread_setname_np) =
-    dlsym(RTLD_DEFAULT, "pthread_setname_np");
+      dlsym(RTLD_DEFAULT, "pthread_setname_np");
   if (dynamic_pthread_setname_np == nullptr) return;
 
   // Mac OS X does not expose the length limit of the name, so hardcode it.
@@ -1232,7 +1240,6 @@ static void* ThreadEntry(void* arg) {
   return nullptr;
 }
 
-
 void Thread::set_name(const char* name) {
   strncpy(name_, name, sizeof(name_) - 1);
   name_[sizeof(name_) - 1] = '\0';
@@ -1284,7 +1291,6 @@ static Thread::LocalStorageKey PthreadKeyToLocalKey(pthread_key_t pthread_key) {
 #endif
 }
 
-
 static pthread_key_t LocalKeyToPthreadKey(Thread::LocalStorageKey local_key) {
 #if V8_OS_CYGWIN
   static_assert(sizeof(Thread::LocalStorageKey) == sizeof(pthread_key_t));
@@ -1328,12 +1334,10 @@ void Thread::DeleteThreadLocalKey(LocalStorageKey key) {
   USE(result);
 }
 
-
 void* Thread::GetThreadLocal(LocalStorageKey key) {
   pthread_key_t pthread_key = LocalKeyToPthreadKey(key);
   return pthread_getspecific(pthread_key);
 }
-
 
 void Thread::SetThreadLocal(LocalStorageKey key, void* value) {
   pthread_key_t pthread_key = LocalKeyToPthreadKey(key);
@@ -1370,7 +1374,7 @@ Stack::StackSlot Stack::ObtainCurrentThreadStackStart() {
 #elif V8_OS_OPENBSD
   stack_t stack;
   int error = pthread_stackseg_np(pthread_self(), &stack);
-  if(error) {
+  if (error) {
     DCHECK(MainThreadIsCurrentThread());
     return nullptr;
   }

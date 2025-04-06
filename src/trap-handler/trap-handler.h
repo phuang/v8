@@ -17,12 +17,12 @@ namespace v8::internal::trap_handler {
 
 // X64 on Linux, Windows, MacOS, FreeBSD.
 #if V8_HOST_ARCH_X64 && V8_TARGET_ARCH_X64 &&                        \
-    ((V8_OS_LINUX && !V8_OS_ANDROID) || V8_OS_WIN || V8_OS_DARWIN || \
+    ((V8_OS_LINUX && !V8_OS_ANDROID && !V8_OS_OHOS) || V8_OS_WIN || V8_OS_DARWIN || \
      V8_OS_FREEBSD)
 #define V8_TRAP_HANDLER_SUPPORTED true
 // Arm64 (non-simulator) on Linux, Windows, MacOS.
 #elif V8_TARGET_ARCH_ARM64 && V8_HOST_ARCH_ARM64 && \
-    ((V8_OS_LINUX && !V8_OS_ANDROID) || V8_OS_WIN || V8_OS_DARWIN)
+    ((V8_OS_LINUX && !V8_OS_ANDROID && !V8_OS_OHOS) || V8_OS_WIN || V8_OS_DARWIN)
 #define V8_TRAP_HANDLER_SUPPORTED true
 // Arm64 simulator on x64 on Linux, Mac, or Windows.
 //
@@ -44,7 +44,7 @@ namespace v8::internal::trap_handler {
 #define V8_TRAP_HANDLER_SUPPORTED true
 // RISCV64 (non-simulator) on Linux.
 #elif V8_TARGET_ARCH_RISCV64 && V8_HOST_ARCH_RISCV64 && V8_OS_LINUX && \
-    !V8_OS_ANDROID
+    !V8_OS_ANDROID && !V8_OS_OHOS
 #define V8_TRAP_HANDLER_SUPPORTED true
 // RISCV64 simulator on x64 on Linux
 #elif V8_TARGET_ARCH_RISCV64 && V8_HOST_ARCH_X64 && V8_OS_LINUX
@@ -55,7 +55,7 @@ namespace v8::internal::trap_handler {
 #define V8_TRAP_HANDLER_SUPPORTED false
 #endif
 
-#if V8_OS_ANDROID && V8_TRAP_HANDLER_SUPPORTED
+#if (V8_OS_ANDROID ||  V8_OS_OHOS) && V8_TRAP_HANDLER_SUPPORTED
 // It would require some careful security review before the trap handler
 // can be enabled on Android.  Android may do unexpected things with signal
 // handling and crash reporting that could open up security holes in V8's

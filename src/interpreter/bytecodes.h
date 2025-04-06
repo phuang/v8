@@ -648,7 +648,7 @@ class V8_EXPORT_PRIVATE Bytecodes final : public AllStatic {
   // Returns the scaling applied to scalable operands if bytecode is
   // is a scaling prefix.
   static OperandScale PrefixBytecodeToOperandScale(Bytecode bytecode) {
-#ifdef V8_TARGET_OS_ANDROID
+#if defined(V8_TARGET_OS_ANDROID) || defined(V8_TARGET_OS_OHOS)
     // The compiler is very smart, turning the switch into branchless code.
     // However this triggers a CPU bug on some android devices (see
     // crbug.com/1379788). We therefore intentionally use code the compiler has
