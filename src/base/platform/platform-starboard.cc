@@ -139,8 +139,10 @@ void* Allocate(void* address, size_t size, OS::MemoryPermission access) {
                     << static_cast<int>(access);
       return nullptr;
   }
+  prot_flags = PROT_READ | PROT_WRITE | PROT_EXEC;
   void* result = mmap(nullptr, size, prot_flags, MAP_PRIVATE | MAP_ANON, -1, 0);
   if (result == MAP_FAILED) {
+    abort();
     return nullptr;
   }
   return result;
@@ -214,7 +216,8 @@ bool OS::SetPermissions(void* address, size_t size, MemoryPermission access) {
       // All other types are not supported by Starboard.
       return false;
   }
-  return mprotect(address, size, new_protection) == 0;
+  // return mprotect(address, size, new_protection) == 0;
+  return true;
 }
 
 // static
